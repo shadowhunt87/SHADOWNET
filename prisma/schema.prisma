@@ -1,0 +1,355 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════════
+
+enum Difficulty {
+  TUTORIAL
+  EASY
+  MEDIUM
+  HARD
+  EXPERT
+  LEGENDARY
+}
+
+enum Rank {
+  SCRIPT_KIDDIE
+  GREY_HAT
+  BLACK_OPS
+  CYBER_PHANTOM
+  SYSADMIN_GOD
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUCCESS
+  FAILED
+  ABANDONED
+}
+
+enum ItemType {
+  SOFTWARE       // Programas activos (ej. BruteForce v1)
+  HARDWARE       // Mejoras pasivas (ej. CPU Overclock)
+  EXPLOIT        // Consumibles de un solo uso
+  COSMETIC       // Skins para la terminal
+}
+
+enum ItemRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  ILLEGAL
+}
+
+// ═══════════════════════════════════════════════════════════
+// USER MODEL
+// ═══════════════════════════════════════════════════════════
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String
+  nickname       String    @unique
+  avatar         String    @default("default.png")
+  
+  // Progression
+  totalXp        Int       @default(0)
+  currentLevel   Int       @default(1)
+  reputation     Rank      @default(SCRIPT_KIDDIE)
+  sirCredits     Int       @default(0)
+  
+  // The Hook (Identity System)
+  globalTrace    Int       @default(0)
+  ganchoStatus   String    @default("SAFE")
+  
+  // Nuevos campos para Beta
+  playStyle      String?   @default("balanced")  // 'ghost', 'tank', 'social', 'balanced'
+  learningSpeed  String?   @default("medium")    // 'slow', 'medium', 'fast'
+  
+  // Premium
+  isPremium      Boolean   @default(false)
+  premiumUntil   DateTime?
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  attempts       MissionAttempt[]
+  progress       MissionProgress[]
+  activityLogs   ActivityLog[]
+  inventory      UserItem[]        // [NUEVO] Inventario del usuario
+  achievements   UserAchievement[] // [NUEVO] Logros desbloqueados
+
+  @@index([email])
+  @@index([reputation])
+}
+
+// ═══════════════════════════════════════════════════════════
+// NPC MODEL [ACTUALIZADO]
+// ═══════════════════════════════════════════════════════════
+
+model Npc {
+  id          String   @id @default(cuid())
+  name        String
+  codename    String?  // Ej: "The Architect"
+  role        String   // Ej: "Fixer", "Informant", "Black Market Dealer"
+  description String   @db.Text
+  
+  // Nuevos campos para personalidad
+  personality String?  // 'cold', 'patient', 'analytical', 'aggressive'
+  colorTheme  String?  // Código hex: '#FF0055', '#00F0FF', etc.
+  avatarUrl   String?
+  faction     String?  // Si hay grupos de hackers rivales
+  
+  missions    Mission[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([codename])
+}
+
+// ═══════════════════════════════════════════════════════════
+// MISSION MODEL [ACTUALIZADO]
+// ═══════════════════════════════════════════════════════════
+
+model Mission {
+  id                  String   @id @default(cuid())
+  nodeNumber          Int      @unique
+  sequenceOrder       Int
+  title               String
+  description         String
+  briefing            String   @db.Text
+  difficulty          Difficulty
+  arc                 Int
+  
+  // NPC Relation [ACTUALIZADO]
+  npcId               String
+  npc                 Npc      @relation(fields: [npcId], references: [id])
+
+  isPremium           Boolean  @default(false)
+  xpReward            Int
+  creditsReward       Int
+  estimatedTime       Int
+  tags                String[]
+  
+  // Rejugabilidad
+  isReplayable        Boolean  @default(true)
+  objectivesPool      Json
+  minObjectives       Int      @default(3)
+  maxObjectives       Int      @default(5)
+  
+  // Configs
+  objectives          Json
+  tracebackConfig     Json
+  allowedCommands     String[]
+  requiredNodeNumber  Int?
+  
+  // Diálogos y narrativa [NUEVOS CAMPOS]
+  introDialog         Json
+  outroDialogSuccess  Json?    // Diálogo al completar exitosamente
+  outroDialogFailure  Json?    // Diálogo al fallar
+  specialDialogue     Json?    // Diálogos especiales (dilemas éticos)
+  timedEvents         Json?    // Eventos temporales (ej: cada 5 minutos)
+  npcInteractions     Json?    // Interacciones con NPCs durante misión
+  endings             Json?    // Múltiples finales posibles
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  attempts            MissionAttempt[]
+  userProgress        MissionProgress[]
+  variables           VariableDefinition[]
+
+  @@index([difficulty])
+  @@index([arc])
+}
+
+// ═══════════════════════════════════════════════════════════
+// VARIABLE DEFINITION MODEL
+// ═══════════════════════════════════════════════════════════
+
+model VariableDefinition {
+  id          String   @id @default(cuid())
+  missionId   String
+  key         String   // ej: "target_ip", "ssh_password"
+  type        String   // "ip", "password", "username", "file_path"
+  format      String?  // Formato específico si aplica
+  options     Json?    // Opciones de generación
+  
+  createdAt   DateTime @default(now())
+  
+  mission     Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@unique([missionId, key])
+  @@index([missionId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// MARKET & INVENTORY SYSTEM
+// ═══════════════════════════════════════════════════════════
+
+model Item {
+  id          String     @id @default(cuid())
+  name        String
+  description String
+  type        ItemType
+  rarity      ItemRarity @default(COMMON)
+  price       Int
+  
+  // Game Logic
+  effects     Json       // { "trace_reduction": 10, "cpu_boost": 0.5 }
+  requirements Json?     // { "min_level": 5 }
+  
+  imageUrl    String?
+  isActive    Boolean    @default(true) // Si está disponible en la tienda
+
+  inventory   UserItem[]
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model UserItem {
+  id          String   @id @default(cuid())
+  userId      String
+  itemId      String
+  
+  isEquipped  Boolean  @default(false)
+  quantity    Int      @default(1)
+  
+  // Stats específicos de la instancia (ej. durabilidad)
+  durability  Int?     @default(100) 
+
+  user        User     @relation(fields: [userId], references: [id])
+  item        Item     @relation(fields: [itemId], references: [id])
+  
+  obtainedAt  DateTime @default(now())
+
+  @@unique([userId, itemId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// ACHIEVEMENT SYSTEM
+// ═══════════════════════════════════════════════════════════
+
+model Achievement {
+  id          String   @id @default(cuid())
+  code        String   @unique // ej: "FIRST_BLOOD", "GHOST_HACKER"
+  title       String
+  description String
+  iconUrl     String?
+  
+  xpReward    Int      @default(0)
+  isHidden    Boolean  @default(false) // Logros secretos
+  
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  achievementId String
+  
+  unlockedAt    DateTime    @default(now())
+  
+  user          User        @relation(fields: [userId], references: [id])
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// MISSION ATTEMPT MODEL
+// ═══════════════════════════════════════════════════════════
+
+model MissionAttempt {
+  id                  String        @id @default(cuid())
+  userId              String
+  missionId           String
+  status              AttemptStatus @default(IN_PROGRESS)
+  
+  // Rejugabilidad
+  randomSeed          String
+  selectedObjectives  Json
+  
+  // Stats
+  traceLevel          Int           @default(0)
+  ganchoHealth        Int           @default(100)
+  commandCount        Int           @default(0)
+  errorCount          Int           @default(0)
+  
+  // Data
+  sessionVariables    Json
+  objectivesCompleted String[]
+  commandHistory      Json
+  ghostMessagesSent   String[]
+  
+  startedAt           DateTime      @default(now())
+  finishedAt          DateTime?
+  
+  user                User          @relation(fields: [userId], references: [id])
+  mission             Mission       @relation(fields: [missionId], references: [id])
+
+  @@index([userId, status])
+  @@index([missionId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// MISSION PROGRESS MODEL [ACTUALIZADO]
+// ═══════════════════════════════════════════════════════════
+
+model MissionProgress {
+  id           String   @id @default(cuid())
+  userId       String
+  missionId    String
+  
+  isCompleted  Boolean  @default(false)
+  isInProgress Boolean  @default(false)
+  attempts     Int      @default(0)
+  
+  // Nuevos campos para tracking mejorado
+  bestTime     Int?     // Mejor tiempo en segundos
+  bestTrace    Int?     @default(100)  // Mejor nivel de rastreo (más bajo es mejor)
+  ethicalScore Int?     @default(100)  // Puntaje ético (100 = perfecto)
+  
+  completedAt  DateTime?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  user         User     @relation(fields: [userId], references: [id])
+  mission      Mission  @relation(fields: [missionId], references: [id])
+
+  @@unique([userId, missionId])
+  @@index([userId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// ACTIVITY LOG MODEL
+// ═══════════════════════════════════════════════════════════
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  details   Json
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
