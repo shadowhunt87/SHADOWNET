@@ -9,17 +9,18 @@ class ApiClient {
   ApiClient(this.storage)
       : dio = Dio(
           BaseOptions(
-            // ✅ Cambiado a Render
-            baseUrl: 'https://shadownet.onrender.com/api',
-            connectTimeout:
-                const Duration(seconds: 30), // Aumentado para Render
-            receiveTimeout: const Duration(seconds: 30),
+            baseUrl: kIsWeb
+                ? 'http://localhost:3000/api'
+                : 'http://10.0.2.2:3000/api',
+            connectTimeout: const Duration(seconds: 15),
+            receiveTimeout: const Duration(seconds: 15),
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
           ),
         ) {
+    // ✅ Interceptor para agregar token JWT
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -43,6 +44,7 @@ class ApiClient {
     );
   }
 
+  // ✅ Métodos HTTP genéricos
   Future<Response> get(String path) => dio.get(path);
   Future<Response> post(String path, {dynamic data}) =>
       dio.post(path, data: data);
