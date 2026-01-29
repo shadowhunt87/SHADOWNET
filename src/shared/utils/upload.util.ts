@@ -1,41 +1,29 @@
-import { diskStorage, StorageEngine } from 'multer';
+import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { BadRequestException } from '@nestjs/common';
-import { Request } from 'express';
-import * as fs from 'fs';
 
 // Configuración de almacenamiento para avatars
-export const avatarStorage: StorageEngine = diskStorage({
-  destination: (
-    req: Request,
-    file: Express.Multer.File,
-    cb: (error: Error | null, destination: string) => void
-  ) => {
+export const avatarStorage = diskStorage({
+  destination: (req, file, cb) => {
     const uploadPath = './uploads/avatars';
     
+    // Asegurarse de que la carpeta existe
+    const fs = require('fs');
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
     
     cb(null, uploadPath);
   },
-  filename: (
-    req: Request,
-    file: Express.Multer.File,
-    callback: (error: Error | null, filename: string) => void
-  ) => {
+  filename: (req, file, callback) => {
     const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
     callback(null, uniqueName);
   },
 });
 
 // Filtro para archivos de imagen
-export const imageFileFilter = (
-  req: Request,
-  file: Express.Multer.File,
-  callback: (error: Error | null, acceptFile: boolean) => void
-) => {
+export const imageFileFilter = (req: any, file: any, callback: any) => {
   if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
     return callback(
       new BadRequestException('Solo se permiten archivos de imagen (JPG, PNG, GIF, WEBP)'),
@@ -43,6 +31,7 @@ export const imageFileFilter = (
     );
   }
   
+  // Verificar tipo MIME
   if (!file.mimetype.startsWith('image/')) {
     return callback(
       new BadRequestException('El archivo debe ser una imagen'),
@@ -53,18 +42,14 @@ export const imageFileFilter = (
   callback(null, true);
 };
 
-// Configuración para otros tipos de uploads
-export const missionStorage: StorageEngine = diskStorage({
+// ✅ NUEVO: Configuración para otros tipos de uploads
+export const missionStorage = diskStorage({
   destination: './uploads/missions',
-  filename: (
-    req: Request,
-    file: Express.Multer.File,
-    cb: (error: Error | null, filename: string) => void
-  ) => {
+  filename: (req, file, cb) => {
     const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
     cb(null, uniqueName);
   },
 });
 
-// Validar tamaño máximo de archivo
+// ✅ NUEVO: Validar tamaño máximo de archivo
 export const maxFileSize = 5 * 1024 * 1024; // 5MB

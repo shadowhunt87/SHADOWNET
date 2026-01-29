@@ -164,7 +164,10 @@ model Mission {
   specialDialogue     Json?    // Diálogos especiales (dilemas éticos)
   timedEvents         Json?    // Eventos temporales (ej: cada 5 minutos)
   npcInteractions     Json?    // Interacciones con NPCs durante misión
+  narrativeEvents     Json?    // Eventos narrativos durante la misión
   endings             Json?    // Múltiples finales posibles
+  competitionConfig   Json?    // Config para misiones tipo "boss fight" (M6)
+  epilogue            Json?    // Diálogos de epílogo según decisiones
   
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

@@ -17,9 +17,13 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
-    prefix: '/uploads/',
-  });
+ app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+  prefix: '/uploads/',
+  setHeaders: (res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  },
+});
 
   // ✅ CORS UNIFICADO: Funciona para web Y apps móviles
   const allowedOrigins = config
